@@ -224,7 +224,7 @@ for epoch in range(opt.epoi, opt.niter):
                 real_sim = data.cuda()
 
             if flag:  # fix samples
-                writer.add_image('target imgs', vutils.make_grid(real_sim.mul(0.5).add(0.5), nrow=16))
+                writer.add_image('target imgs', vutils.make_grid(real_sim.mul(0.5).add(0.5), nrow=16), gen_iterations)
                 vutils.save_image(real_sim.mul(0.5).add(0.5),
                                   '%s/sharp_samples' % opt.outf + '.png')
                 flag -= 1
@@ -259,7 +259,11 @@ for epoch in range(opt.epoi, opt.niter):
 
         if gen_iterations % 100 == 0:
             fake = netG(Variable(fixed_noise, volatile=True))
-            writer.add_image('gen imgs', vutils.make_grid(fake.data.mul(0.5).add(0.5), nrow=16))
+            writer.add_image('gen imgs', vutils.make_grid(fake.data.mul(0.5).add(0.5), nrow=16), gen_iterations)
+            for name, param in netG.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), gen_iterations)
+            for name, param in netD.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), gen_iterations)
 
         if gen_iterations % 1000 == 0:
             vutils.save_image(fake.data.mul(0.5).add(0.5),
