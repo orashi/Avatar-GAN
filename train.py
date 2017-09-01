@@ -261,9 +261,9 @@ for epoch in range(opt.epoi, opt.niter):
             fake = netG(Variable(fixed_noise, volatile=True))
             writer.add_image('gen imgs', vutils.make_grid(fake.data.mul(0.5).add(0.5), nrow=16), gen_iterations)
             for name, param in netG.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), gen_iterations)
+                writer.add_histogram('netG' + name, param.clone().cpu().data.numpy(), gen_iterations)
             for name, param in netD.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), gen_iterations)
+                writer.add_histogram('netD' + name, param.clone().cpu().data.numpy(), gen_iterations)
 
         if gen_iterations % 1000 == 0:
             vutils.save_image(fake.data.mul(0.5).add(0.5),
