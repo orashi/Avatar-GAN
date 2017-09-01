@@ -11,8 +11,8 @@ class ResBlock(nn.Module):
         self.conv2 = nn.Conv2d(channel, channel, kernel_size=3, stride=1, padding=Dilation, dilation=Dilation)
 
     def forward(self, x):
-        out = self.conv1(F.selu(x, False))
-        out = self.conv2(F.selu(out, True))
+        out = self.conv1(F.relu(x, False))
+        out = self.conv2(F.relu(out, True))
 
         out += x
         return out
@@ -36,8 +36,8 @@ class DResBlock(nn.Module):
         self.conv2 = nn.Conv2d(channel, channel, kernel_size=3, stride=1, padding=Dilation, dilation=Dilation)
 
     def forward(self, x):
-        out = self.conv1(F.selu(x, False))
-        out = self.conv2(F.selu(out, True))
+        out = self.conv1(F.leaky_relu(x, 0.2, False))
+        out = self.conv2(F.leaky_relu(out, 0.2, True))
 
         out += x
         return out
@@ -60,7 +60,7 @@ class Gnet(nn.Module):
 
         self.model = nn.Sequential(nn.Conv2d(100, 1024, 1, 1, bias=False),
                                    nn.PixelShuffle(4),
-                                   nn.SELU(inplace=True),
+                                   nn.ReLU(inplace=True),
                                    nn.Conv2d(64, 256, 3, 1, 1, bias=False),
                                    nn.PixelShuffle(2),
                                    nn.Conv2d(64, 256, 3, 1, 1, bias=False),
@@ -68,10 +68,10 @@ class Gnet(nn.Module):
                                    Tunnel(16),
                                    nn.Conv2d(64, 256, 3, 1, 1, bias=False),
                                    nn.PixelShuffle(2),
-                                   nn.SELU(inplace=True),
+                                   nn.ReLU(inplace=True),
                                    nn.Conv2d(64, 256, 3, 1, 1, bias=False),
                                    nn.PixelShuffle(2),
-                                   nn.SELU(inplace=True),
+                                   nn.ReLU(inplace=True),
                                    nn.Conv2d(64, 3, 3, 1, 1, bias=False),
                                    nn.Tanh()
                                    )
@@ -86,7 +86,7 @@ class PatchD(nn.Module):
 
         sequence = [
             nn.Conv2d(3, ndf, kernel_size=4, stride=2, padding=1),
-            nn.SELU(True),
+            nn.LeakyReLU(0.2, True),
             DTunnel(2, ndf),
 
         ]  # 32
@@ -94,21 +94,21 @@ class PatchD(nn.Module):
         sequence += [
             nn.Conv2d(ndf * 1, ndf * 2,
                       kernel_size=4, stride=2, padding=1),
-            nn.SELU(True),
+            nn.LeakyReLU(0.2, True),
             DTunnel(2, ndf * 2),
         ]  # 16
 
         sequence += [
             nn.Conv2d(ndf * 2, ndf * 4,
                       kernel_size=4, stride=2, padding=1),
-            nn.SELU(True),
+            nn.LeakyReLU(0.2, True),
             DTunnel(2, ndf * 4),
         ]  # 8
 
         sequence += [
             nn.Conv2d(ndf * 4, ndf * 8,
                       kernel_size=4, stride=2, padding=1),
-            nn.SELU(True),
+            nn.LeakyReLU(0.2, True),
             DTunnel(2, ndf * 8),  # 4
             nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=0)
         ]
