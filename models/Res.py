@@ -14,7 +14,7 @@ class ResBlock(nn.Module):
         out = self.conv1(F.relu(x, False))
         out = self.conv2(F.relu(out, True))
 
-        out += x
+        out += 0.1 * x
         return out
 
 
@@ -39,7 +39,7 @@ class DResBlock(nn.Module):
         out = self.conv1(F.leaky_relu(x, 0.2, False))
         out = self.conv2(F.leaky_relu(out, 0.2, True))
 
-        out += x
+        out += 0.1 * x
         return out
 
 
