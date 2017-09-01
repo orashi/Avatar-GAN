@@ -10,8 +10,7 @@ import torch.optim as optim
 from torch.autograd import Variable, grad
 import torch.optim.lr_scheduler as lr_scheduler
 import torchvision.utils as vutils
-from visdom import Visdom
-
+from tensorboardX import SummaryWriter
 from data.aData import CreateDataLoader
 from models.Res import *
 
@@ -29,12 +28,13 @@ parser.add_argument('--gp', action='store_true', help='train with wgan-gp')
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--netG', default='', help="path to netG (to continue training)")
 parser.add_argument('--netD', default='', help="path to netD (to continue training)")
+parser.add_argument('--optim', action='store_true', help='load optimizer\'s checkpoint')
 parser.add_argument('--outf', default='.', help='folder to output images and model checkpoints')
 parser.add_argument('--Diters', type=int, default=1, help='number of D iters per each G iter')
 parser.add_argument('--manualSeed', type=int, default=2345, help='random seed to use. Default=1234')
 parser.add_argument('--geni', type=int, default=0, help='continue gen image num')
 parser.add_argument('--epoi', type=int, default=0, help='continue epoch num')
-parser.add_argument('--env', type=str, default='main', help='visdom env')
+parser.add_argument('--env', type=str, default=None, help='visdom env')
 
 opt = parser.parse_args()
 print(opt)
@@ -57,8 +57,7 @@ if opt.cuda:
 cudnn.benchmark = True
 ####### regular set up end
 
-
-viz = Visdom(env=opt.env)
+writer = SummaryWriter(log_dir=opt.env, comment='test')
 
 dataloader_train = CreateDataLoader(opt)
 
@@ -97,6 +96,9 @@ if opt.cuda:
 # setup optimizer
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lrG, betas=(opt.beta1, 0.9))
 optimizerD = optim.Adam(netD.parameters(), lr=opt.lrD, betas=(opt.beta1, 0.9))
+if opt.optim:
+    optimizerG.load_state_dict(torch.load('%s/optimG_checkpoint.pth' % opt.outf))
+    optimizerD.load_state_dict(torch.load('%s/optimD_checkpoint.pth' % opt.outf))
 
 
 # schedulerG = lr_scheduler.ReduceLROnPlateau(optimizerG, mode='max', verbose=True, min_lr=0.000005,
@@ -222,10 +224,7 @@ for epoch in range(opt.epoi, opt.niter):
                 real_sim = data.cuda()
 
             if flag:  # fix samples
-                viz.images(
-                    real_sim.mul(0.5).add(0.5).cpu().numpy(),
-                    opts=dict(title='sharp img', caption='level ')
-                )
+                writer.add_image('target imgs', vutils.make_grid(real_sim.mul(0.5).add(0.5), nrow=16))
                 vutils.save_image(real_sim.mul(0.5).add(0.5),
                                   '%s/sharp_samples' % opt.outf + '.png')
                 flag -= 1
@@ -248,34 +247,11 @@ for epoch in range(opt.epoi, opt.niter):
         # (3) Report & 100 Batch checkpoint
         ############################
 
-        if flag4:
-            D1 = viz.line(
-                np.array([errD.data[0]]), np.array([gen_iterations]),
-                opts=dict(title='errD(distinguishability)', caption='total Dloss')
-            )
-            D2 = viz.line(
-                np.array([errD_real.data[0]]), np.array([gen_iterations]),
-                opts=dict(title='errD_real', caption='real\'s mistake')
-            )
-            D3 = viz.line(
-                np.array([errD_fake.data[0]]), np.array([gen_iterations]),
-                opts=dict(title='errD_fake', caption='fake\'s mistake')
-            )
-            G1 = viz.line(
-                np.array([errG.data[0]]), np.array([gen_iterations]),
-                opts=dict(title='Gnet loss toward real', caption='Gnet loss')
-            )
-            G2 = viz.line(
-                np.array([gradient_penalty.data[0]]), np.array([gen_iterations]),
-                opts=dict(title='gradient_penalty', caption='gradient_penalty')
-            )
-            flag4 -= 1
-
-        viz.line(np.array([errD.data[0]]), np.array([gen_iterations]), update='append', win=D1)
-        viz.line(np.array([errD_real.data[0]]), np.array([gen_iterations]), update='append', win=D2)
-        viz.line(np.array([errD_fake.data[0]]), np.array([gen_iterations]), update='append', win=D3)
-        viz.line(np.array([errG.data[0]]), np.array([gen_iterations]), update='append', win=G1)
-        viz.line(np.array([gradient_penalty.data[0]]), np.array([gen_iterations]), update='append', win=G2)
+        writer.add_scalar('wasserstein distance', errD.data[0], gen_iterations)
+        writer.add_scalar('errD_real', errD_real.data[0], gen_iterations)
+        writer.add_scalar('errD_fake', errD_fake.data[0], gen_iterations)
+        writer.add_scalar('Gnet loss toward real', errG.data[0], gen_iterations)
+        writer.add_scalar('gradient_penalty', gradient_penalty.data[0], gen_iterations)
 
         print('[%d/%d][%d/%d][%d] errD: %f err_G: %f err_D_real: %f err_D_fake %f gp %f'
               % (epoch, opt.niter, iter_count, len(dataloader_train), gen_iterations,
@@ -283,20 +259,7 @@ for epoch in range(opt.epoi, opt.niter):
 
         if gen_iterations % 100 == 0:
             fake = netG(Variable(fixed_noise, volatile=True))
-
-            if flag3:
-                imageW = viz.images(
-                    fake.data.mul(0.5).add(0.5).cpu().numpy(),
-                    opts=dict(title='gen img', caption='level ')
-                )
-
-                flag3 -= 1
-            else:
-                viz.images(
-                    fake.data.mul(0.5).add(0.5).cpu().numpy(),
-                    win=imageW,
-                    opts=dict(title='gen img', caption='level ')
-                )
+            writer.add_image('gen imgs', vutils.make_grid(fake.data.mul(0.5).add(0.5), nrow=16))
 
         if gen_iterations % 1000 == 0:
             vutils.save_image(fake.data.mul(0.5).add(0.5),
@@ -311,3 +274,6 @@ for epoch in range(opt.epoi, opt.niter):
     elif epoch % opt.cut == 0:
         torch.save(netG.state_dict(), '%s/netG_epoch_%d.pth' % (opt.outf, epoch))
         torch.save(netD.state_dict(), '%s/netD_epoch_%d.pth' % (opt.outf, epoch))
+    torch.save(optimizerG.state_dict(), '%s/optimG_checkpoint.pth' % opt.outf)
+    torch.save(optimizerD.state_dict(), '%s/optimD_checkpoint.pth' % opt.outf)
+
